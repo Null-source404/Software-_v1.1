@@ -153,7 +153,7 @@ Right now, analytics are processed synchronously inside the redirect request. Th
 url-shortener/
 ├── src/
 │   ├── config/
-│   │   └── db.js              # PostgreSQL connection pool
+│   │   └── db.js              # MySQL connection pool
 │   ├── controllers/
 │   │   └── urlController.js   # Business logic
 │   ├── routes/
@@ -171,7 +171,7 @@ url-shortener/
 
 ## 🚀 Running Phase 1 Locally
 
-**Prerequisites:** Node.js 18+, PostgreSQL running locally
+**Prerequisites:** Node.js 18+, MySQL running locally
 
 ```bash
 # 1. Clone the repo
