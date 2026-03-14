@@ -29,7 +29,7 @@ Internet
               │            │            │
               ▼            ▼            ▼
        ┌──────────┐ ┌──────────┐ ┌──────────────┐
-       │  MySQL │ │RabbitMQ  │ │  WebSocket   │
+       │  MySQL   │ │RabbitMQ  │ │  WebSocket   │
        │(Phase 1) │ │(Phase 7) │ │  Dashboard   │
        │ Primary  │ │  Queue   │ │  (Phase 4)   │
        │   DB     │ │          │ │              │
