@@ -55,7 +55,7 @@ The foundation. A working URL shortener — nothing more, nothing less.
 - Global error handler that never leaks internals to the client
 - Database index on `short_code` for O(log n) lookups
 
-**Stack:** Node.js · Express · PostgreSQL · nanoid · Helmet · CORS
+**Stack:** Node.js · Express · MySQL · nanoid · Helmet · CORS
 
 ---
 
