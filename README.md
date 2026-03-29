@@ -43,7 +43,7 @@ Internet
 ## 📦 Phases
 
 ### ✅ Phase 1 — The Core
-**Concepts:** Express.js · PostgreSQL · REST API · Connection Pooling
+**Concepts:** Express.js · MySQL · REST API · Connection Pooling
 
 The foundation. A working URL shortener — nothing more, nothing less.
 
