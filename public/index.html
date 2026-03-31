@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+  <title>URL Shortener</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+    </head>
+<body>
+  <div class="container">
+    <h1>URL Shortener</h1>
+    <p class="subtitle">Paste a link to get a shareable short code instantly. Click the short link to redirect.</p>
+
+    <div class="card">
+      <label for="originalUrl">Original URL</label>
+      <input type="text" id="originalUrl" placeholder="https://example.com" >
+      <button class="primary" type="button" id="shortenBtn">Shorten URL</button>
+      <div id="status"></div>
+    </div>
+
+    <div class="card">
+      <h3>Shortened URL</h3>
+      <div id="shortUrl" class="result">Your shortened link will appear here.</div>
+      <p class="hint">Click link to open in new tab. Use the short code below for stats.</p>
+    </div>
+
+    <div class="card">
+      <h3>Statistics</h3>
+      <label for="statsCode">Short Code</label>
+      <input type="text" id="statsCode" placeholder="e.g. 4f3ab920" >
+      <button class="secondary" type="button" id="statsBtn">Get Stats</button>
+      <div id="statsResult" class="result">Check click and URL info.</div>
+    </div>
+    </div>
+
+    <script>
+    const status = document.getElementById('status');
+    const shortUrlDiv = document.getElementById('shortUrl');
+    const statsResult = document.getElementById('statsResult');
+
+    const setMessage = (type, text) => {
+    status.className = type;
+    status.textContent = text;
+    };
+
+    document.getElementById('shortenBtn').addEventListener('click', async () => {
+        const originalUrl = document.getElementById('originalUrl').value.trim();
+    if (!originalUrl) {
+        setMessage('error', 'Provide a valid URL first.');
+        return;
+        }
+    setMessage('loading', 'Shortening URL...');
+
+    try {
+        const res = await fetch('/api/shorten', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ originalUrl }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || data.message || 'Failed to shorten URL');
+
+        shortUrlDiv.innerHTML = `<a href="${data.shortUrl}" target="_blank" class="link-chip">${data.shortUrl}</a>\nClick code: <strong>${data.shortCode}</strong>`;
+        setMessage('ok', 'URL shortened successfully.');
+        } catch (error) {
+        setMessage('error', error.message || 'Something went wrong');
+        }
+    });
+
+    document.getElementById('statsBtn').addEventListener('click', async () => {
+        const shortCode = document.getElementById('statsCode').value.trim();
+    if (!shortCode) {
+        statsResult.textContent = 'Short code required for stats.';
+        return;
+        }
+        statsResult.textContent = 'Querying stats...';
+
+    try {
+        const res = await fetch(`/api/stats/${encodeURIComponent(shortCode)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || data.message || 'Stats fetch failed');
+
+        statsResult.textContent = `Original: ${data.original_url}\nCreated: ${new Date(data.created_at).toLocaleString()}\nClicks: ${data.click_count}`;
+        } catch (error) {
+        statsResult.textContent = 'Error: ' + (error.message || 'Unable to fetch stats');
+        }
+    });
+    </script>
+</body>
+</html>
