@@ -2,93 +2,709 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>URL Shortener</title>
+  <meta name="description" content="A fast, lightweight URL shortener service with QR code generation, phishing & broken link protection, and click telemetry.">
+  <meta property="og:title" content="URL Shortener">
+  <meta property="og:description" content="A fast, lightweight URL shortener service with QR code generation, phishing & broken link protection, and click telemetry.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-    </head>
+</head>
 <body>
-  <div class="container">
-    <h1>URL Shortener</h1>
-    <p class="subtitle">Paste a link to get a shareable short code instantly. Click the short link to redirect.</p>
+  <!-- 3-Zone Top Bar Contract -->
+  <div class="topbar-wrap">
+    <header class="topbar">
+      <a href="#shorten-section" class="brand-mark">ShortLink</a>
+      <nav class="topbar-nav" aria-label="Main Navigation">
+        <a href="#shorten-section">Shorten</a>
+        <a href="#directory-section">Directory</a>
+        <a href="#inspector-section">Analytics</a>
+        <a href="#api-section">API Docs</a>
+      </nav>
+      <div class="topbar-actions">
+        <button type="button" class="ghost" id="exportCsvBtn">Export CSV</button>
+        <button type="button" class="primary" id="focusUrlBtn">+ New Link</button>
+      </div>
+    </header>
+  </div>
 
-    <div class="card">
-      <label for="originalUrl">Original URL</label>
-      <input type="text" id="originalUrl" placeholder="https://example.com" >
-      <button class="primary" type="button" id="shortenBtn">Shorten URL</button>
-      <div id="status"></div>
-    </div>
+  <main class="workspace">
+    <!-- Hero Header -->
+    <section class="hero-header">
+      <div>
+        <h1 class="hero-title">URL Shortener, QR Generator &amp; Link Protection</h1>
+        <p class="hero-subtitle">Generate compact short links with automatic QR codes, real-time click telemetry, and active protection that blocks broken or phishing links.</p>
+      </div>
+      <div class="summary-metrics" aria-label="Workspace Summary">
+        <div class="metric-item">
+          <span class="metric-value" id="totalLinksMetric">0</span>
+          <span class="metric-label">Active Links</span>
+        </div>
+        <div class="metric-divider" aria-hidden="true"></div>
+        <div class="metric-item">
+          <span class="metric-value" id="totalClicksMetric">0</span>
+          <span class="metric-label">Total Redirects</span>
+        </div>
+      </div>
+    </section>
 
-    <div class="card">
-      <h3>Shortened URL</h3>
-      <div id="shortUrl" class="result">Your shortened link will appear here.</div>
-      <p class="hint">Click link to open in new tab. Use the short code below for stats.</p>
-    </div>
+    <!-- Primary Focal Anchor: Full-Width URL Shortener & Safety Composer -->
+    <section class="panel" id="shorten-section">
+      <div class="panel-header">
+        <h2 class="panel-title">Create Short Link</h2>
+        <span class="panel-meta">Supports https://, http://, and www. links · Phishing &amp; broken-link guard active</span>
+      </div>
 
-    <div class="card">
-      <h3>Statistics</h3>
-      <label for="statsCode">Short Code</label>
-      <input type="text" id="statsCode" placeholder="e.g. 4f3ab920" >
-      <button class="secondary" type="button" id="statsBtn">Get Stats</button>
-      <div id="statsResult" class="result">Check click and URL info.</div>
-    </div>
-    </div>
+      <form id="shortenForm" novalidate>
+        <div class="composer-grid">
+          <div class="field-group">
+            <label for="originalUrl">Destination URL</label>
+            <input type="text" inputmode="url" id="originalUrl" placeholder="https://example.com/documentation or www.example.co.org" required>
+          </div>
+          <div class="field-group">
+            <label for="customCode">Custom Alias (Optional)</label>
+            <input type="text" id="customCode" class="mono-input" placeholder="e.g. release-v1" maxlength="24">
+          </div>
+          <div class="composer-buttons">
+            <button class="secondary" type="button" id="verifySafetyBtn">Check Safety</button>
+            <button class="primary" type="submit" id="shortenBtn">Shorten URL</button>
+          </div>
+        </div>
 
-    <script>
-    const status = document.getElementById('status');
+        <div class="composer-status-row">
+          <div id="status" role="status" aria-live="polite"></div>
+        </div>
+      </form>
+
+      <!-- Phishing / Broken Link Warning Alert -->
+      <div id="securityWarningBox" class="security-alert" role="alert" hidden>
+        <p class="security-alert-title" id="securityAlertTitle"></p>
+        <ul class="security-alert-reasons" id="securityAlertReasons"></ul>
+      </div>
+
+      <!-- Shortened Link & QR Result Banner -->
+      <div class="result-banner" id="shortResultContainer">
+        <div class="result-row">
+          <div class="result-main-info">
+            <div class="qr-preview-box" id="latestQrBox" hidden>
+              <img id="latestQrImg" src="" alt="QR code for shortened link" referrerpolicy="no-referrer">
+            </div>
+            <div class="result-text-stack">
+              <div id="shortUrl" class="unboxed-meta">Your shortened link and scannable QR code will appear here once generated.</div>
+              <div id="shortMetaSub" class="unboxed-meta" hidden></div>
+            </div>
+          </div>
+          <div class="row-actions" id="resultActionBtns" hidden>
+            <button type="button" class="secondary" id="copyLatestBtn">Copy Link</button>
+            <button type="button" class="ghost" id="downloadLatestQrBtn">Download QR</button>
+            <button type="button" class="ghost" id="inspectLatestBtn">Inspect Stats</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Spacious Full-Width Shortened Links Directory -->
+    <section class="directory-section" id="directory-section">
+      <div class="toolbar">
+        <div>
+          <h2 class="panel-title">Shortened Links Directory</h2>
+        </div>
+        <div class="toolbar-controls">
+          <div class="search-input-wrap">
+            <input type="search" id="searchInput" placeholder="Filter by code or destination URL...">
+          </div>
+          <div class="segmented-group" role="group" aria-label="Sort order">
+            <button type="button" class="segmented-btn active" data-sort="newest" id="sortNewestBtn">Newest</button>
+            <button type="button" class="segmented-btn" data-sort="clicks" id="sortClicksBtn">Most Clicked</button>
+          </div>
+          <button type="button" class="ghost" id="refreshListBtn">Refresh</button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>QR Code</th>
+              <th>Short Link</th>
+              <th>Destination URL</th>
+              <th>Created</th>
+              <th class="num-col">Clicks</th>
+              <th class="num-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="urlsTableBody">
+            <tr>
+              <td colspan="6" class="empty-state">Loading shortened links...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Balanced 2-Column Bottom Section: Link Telemetry Inspector + API Reference -->
+    <div class="bottom-split-grid">
+      <!-- Statistics Inspector Panel -->
+      <section class="panel" id="inspector-section">
+        <div class="panel-header">
+          <h2 class="panel-title">Link Telemetry Inspector</h2>
+          <span class="panel-meta" id="statsCodeIndicator">Lookup by short code</span>
+        </div>
+
+        <form id="statsForm" class="stats-search-bar" novalidate>
+          <input type="text" id="statsCode" class="mono-input" placeholder="Enter short code (e.g. gh-repo)">
+          <button class="secondary" type="submit" id="statsBtn">Get Stats</button>
+        </form>
+
+        <div id="statsResult" class="stats-inspector-layout">
+          <div class="qr-preview-box" id="statsQrBox" hidden>
+            <img id="statsQrImg" src="" alt="QR code for inspected link" referrerpolicy="no-referrer">
+          </div>
+          <div class="stats-grid">
+            <div class="stat-field">
+              <span class="stat-key">Short Code</span>
+              <span class="stat-val mono" id="statShortCode">—</span>
+            </div>
+            <div class="stat-field">
+              <span class="stat-key">Total Clicks</span>
+              <span class="stat-val mono" id="statClicks">—</span>
+            </div>
+            <div class="stat-field full-width">
+              <span class="stat-key">Destination URL</span>
+              <span class="stat-val" id="statOriginalUrl">Select "Inspect" on any row above or enter a code to view live telemetry.</span>
+            </div>
+            <div class="stat-field">
+              <span class="stat-key">Created</span>
+              <span class="stat-val mono" id="statCreatedAt">—</span>
+            </div>
+            <div class="stat-field">
+              <span class="stat-key">Last Accessed</span>
+              <span class="stat-val mono" id="statLastAccessed">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Developer API Documentation -->
+      <section class="panel" id="api-section">
+        <div class="panel-header">
+          <h2 class="panel-title">REST API Reference</h2>
+          <span class="panel-meta">JSON Endpoints · QR &amp; Safety Guard</span>
+        </div>
+
+        <div class="api-stack">
+          <div class="endpoint-block">
+            <p class="endpoint-title">POST /api/shorten</p>
+            <p class="endpoint-desc">Audits safety &amp; reachability, blocks phishing/broken links (HTTP 422), and returns short link + QR code.</p>
+            <pre class="code-snippet">curl -X POST http://localhost:3000/api/shorten \
+  -H "Content-Type: application/json" \
+  -d '{"originalUrl":"https://example.com","customCode":"my-link"}'</pre>
+          </div>
+
+          <div class="endpoint-block">
+            <p class="endpoint-title">POST /api/verify-url</p>
+            <p class="endpoint-desc">Pre-scans a URL for phishing indicators (brand spoofing, punycode, credential tricks) and broken status.</p>
+            <pre class="code-snippet">curl -X POST http://localhost:3000/api/verify-url \
+  -H "Content-Type: application/json" \
+  -d '{"originalUrl":"https://paypal-secure-login.com"}'</pre>
+          </div>
+
+          <div class="endpoint-block">
+            <p class="endpoint-title">GET /api/stats/:shortCode &amp; GET /:shortCode</p>
+            <p class="endpoint-desc">Fetches link telemetry + QR code or performs a verified HTTP 302 redirect.</p>
+            <pre class="code-snippet">curl http://localhost:3000/api/stats/gh-repo</pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <span>ShortLink URL Shortener Service · Express, QRCode &amp; Link Safety Guard</span>
+    <span>MIT License</span>
+  </footer>
+
+  <script>
+    const statusEl = document.getElementById('status');
     const shortUrlDiv = document.getElementById('shortUrl');
-    const statsResult = document.getElementById('statsResult');
+    const shortMetaSub = document.getElementById('shortMetaSub');
+    const latestQrBox = document.getElementById('latestQrBox');
+    const latestQrImg = document.getElementById('latestQrImg');
+    const statsQrBox = document.getElementById('statsQrBox');
+    const statsQrImg = document.getElementById('statsQrImg');
+    const resultActionBtns = document.getElementById('resultActionBtns');
+    const securityWarningBox = document.getElementById('securityWarningBox');
+    const securityAlertTitle = document.getElementById('securityAlertTitle');
+    const securityAlertReasons = document.getElementById('securityAlertReasons');
+    const originalUrlInput = document.getElementById('originalUrl');
+    const customCodeInput = document.getElementById('customCode');
+    const statsCodeInput = document.getElementById('statsCode');
+    const urlsTableBody = document.getElementById('urlsTableBody');
+    const totalLinksMetric = document.getElementById('totalLinksMetric');
+    const totalClicksMetric = document.getElementById('totalClicksMetric');
+    const searchInput = document.getElementById('searchInput');
+
+    let allUrls = [];
+    let currentSort = 'newest';
+    let latestShortData = null;
 
     const setMessage = (type, text) => {
-    status.className = type;
-    status.textContent = text;
+      statusEl.className = type;
+      statusEl.textContent = text;
     };
 
-    document.getElementById('shortenBtn').addEventListener('click', async () => {
-        const originalUrl = document.getElementById('originalUrl').value.trim();
-    if (!originalUrl) {
-        setMessage('error', 'Provide a valid URL first.');
-        return;
-        }
-    setMessage('loading', 'Shortening URL...');
+    const hideSecurityAlert = () => {
+      securityWarningBox.hidden = true;
+      securityWarningBox.className = 'security-alert';
+      securityAlertTitle.textContent = '';
+      securityAlertReasons.innerHTML = '';
+    };
 
-    try {
-        const res = await fetch('/api/shorten', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ originalUrl }),
+    const showSecurityAlert = (status, category, reasons = []) => {
+      securityWarningBox.hidden = false;
+      securityWarningBox.className = `security-alert ${status || 'phishing'}`;
+      if (status === 'verified') {
+        securityAlertTitle.textContent = `${category} — This link passed phishing and reachability checks.`;
+      } else {
+        securityAlertTitle.textContent = `Access Disallowed — ${category || 'Unsafe or Broken Link'}`;
+      }
+      securityAlertReasons.innerHTML = '';
+      (reasons || []).forEach((reason) => {
+        const li = document.createElement('li');
+        li.textContent = reason;
+        securityAlertReasons.appendChild(li);
+      });
+    };
+
+    const downloadQrDataUrl = (dataUrl, shortCode) => {
+      if (!dataUrl) return;
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `qr-${shortCode || 'shortlink'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'Never';
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return '—';
+      return d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    };
+
+    const copyToClipboard = async (text, buttonEl) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        if (buttonEl) {
+          const originalLabel = buttonEl.textContent;
+          buttonEl.textContent = 'Copied';
+          setTimeout(() => {
+            buttonEl.textContent = originalLabel;
+          }, 1400);
+        }
+      } catch {
+        setMessage('error', 'Failed to copy to clipboard');
+      }
+    };
+
+    const renderStatsPanel = (data) => {
+      const code = data.short_code || data.shortCode || '—';
+      document.getElementById('statShortCode').textContent = code;
+      document.getElementById('statClicks').textContent = String(data.click_count ?? data.clickCount ?? 0);
+      document.getElementById('statOriginalUrl').textContent = data.original_url || data.originalUrl || '—';
+      document.getElementById('statCreatedAt').textContent = formatDate(data.created_at || data.createdAt);
+      document.getElementById('statLastAccessed').textContent = formatDate(data.last_accessed_at || data.lastAccessedAt);
+      document.getElementById('statsCodeIndicator').textContent = `Code: ${code}`;
+
+      if (data.qrCodeDataUrl) {
+        statsQrImg.src = data.qrCodeDataUrl;
+        statsQrImg.alt = `QR code for ${code}`;
+        statsQrBox.hidden = false;
+      }
+    };
+
+    const renderTable = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      const filtered = allUrls
+        .filter((item) => {
+          if (!query) return true;
+          return (
+            item.shortCode.toLowerCase().includes(query) ||
+            item.originalUrl.toLowerCase().includes(query)
+          );
+        })
+        .sort((a, b) => {
+          if (currentSort === 'clicks') {
+            return b.clickCount - a.clickCount;
+          }
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || data.message || 'Failed to shorten URL');
-
-        shortUrlDiv.innerHTML = `<a href="${data.shortUrl}" target="_blank" class="link-chip">${data.shortUrl}</a>\nClick code: <strong>${data.shortCode}</strong>`;
-        setMessage('ok', 'URL shortened successfully.');
-        } catch (error) {
-        setMessage('error', error.message || 'Something went wrong');
-        }
-    });
-
-    document.getElementById('statsBtn').addEventListener('click', async () => {
-        const shortCode = document.getElementById('statsCode').value.trim();
-    if (!shortCode) {
-        statsResult.textContent = 'Short code required for stats.';
+      if (filtered.length === 0) {
+        urlsTableBody.innerHTML = `
+          <tr>
+            <td colspan="6" class="empty-state">
+              ${query ? 'No links match your search filter.' : 'No shortened URLs yet. Paste a link above to create your first short URL.'}
+            </td>
+          </tr>
+        `;
         return;
-        }
-        statsResult.textContent = 'Querying stats...';
+      }
 
-    try {
+      urlsTableBody.innerHTML = '';
+      filtered.forEach((item) => {
+        const tr = document.createElement('tr');
+
+        // 1. QR Code column
+        const tdQr = document.createElement('td');
+        if (item.qrCodeDataUrl) {
+          const qrWrap = document.createElement('div');
+          qrWrap.className = 'qr-table-thumb';
+          qrWrap.title = `Click to download QR code for ${item.shortCode}`;
+          qrWrap.style.cursor = 'pointer';
+          const qrImg = document.createElement('img');
+          qrImg.src = item.qrCodeDataUrl;
+          qrImg.alt = `QR code for ${item.shortCode}`;
+          qrImg.referrerPolicy = 'no-referrer';
+          qrWrap.appendChild(qrImg);
+          qrWrap.addEventListener('click', () => downloadQrDataUrl(item.qrCodeDataUrl, item.shortCode));
+          tdQr.appendChild(qrWrap);
+        } else {
+          tdQr.textContent = '—';
+        }
+
+        // 2. Clean Short Link (/code) column — avoids stretching the table with long hostnames
+        const tdShort = document.createElement('td');
+        const shortCellWrap = document.createElement('div');
+        shortCellWrap.className = 'short-code-cell';
+
+        const linkEl = document.createElement('a');
+        linkEl.href = `/${encodeURIComponent(item.shortCode)}`;
+        linkEl.target = '_blank';
+        linkEl.rel = 'noopener noreferrer';
+        linkEl.className = 'short-code-link';
+        linkEl.title = item.shortUrl;
+        linkEl.textContent = `/${item.shortCode}`;
+        linkEl.addEventListener('click', () => {
+          setTimeout(fetchUrls, 600);
+        });
+
+        const hostSub = document.createElement('span');
+        hostSub.className = 'short-code-host';
+        hostSub.textContent = `Code: ${item.shortCode}`;
+
+        shortCellWrap.append(linkEl, hostSub);
+        tdShort.appendChild(shortCellWrap);
+
+        // 3. Destination URL column
+        const tdDest = document.createElement('td');
+        tdDest.className = 'dest-cell';
+        const destLink = document.createElement('a');
+        destLink.href = item.originalUrl;
+        destLink.target = '_blank';
+        destLink.rel = 'noopener noreferrer';
+        destLink.title = item.originalUrl;
+        destLink.textContent = item.originalUrl;
+        tdDest.appendChild(destLink);
+
+        // 4. Created column
+        const tdCreated = document.createElement('td');
+        tdCreated.className = 'unboxed-meta';
+        tdCreated.textContent = formatDate(item.createdAt);
+
+        // 5. Clicks column
+        const tdClicks = document.createElement('td');
+        tdClicks.className = 'num-col';
+        tdClicks.textContent = String(item.clickCount);
+
+        // 6. Actions column
+        const tdActions = document.createElement('td');
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'row-actions';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'ghost';
+        copyBtn.textContent = 'Copy';
+        copyBtn.addEventListener('click', () => copyToClipboard(item.shortUrl, copyBtn));
+
+        const qrBtn = document.createElement('button');
+        qrBtn.type = 'button';
+        qrBtn.className = 'ghost';
+        qrBtn.textContent = 'QR';
+        qrBtn.addEventListener('click', () => downloadQrDataUrl(item.qrCodeDataUrl, item.shortCode));
+
+        const inspectBtn = document.createElement('button');
+        inspectBtn.type = 'button';
+        inspectBtn.className = 'ghost';
+        inspectBtn.textContent = 'Inspect';
+        inspectBtn.addEventListener('click', () => {
+          statsCodeInput.value = item.shortCode;
+          lookupStats(item.shortCode);
+          document.getElementById('inspector-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'danger-text';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', () => deleteShortUrl(item.shortCode));
+
+        actionsWrap.append(copyBtn, qrBtn, inspectBtn, deleteBtn);
+        tdActions.appendChild(actionsWrap);
+
+        tr.append(tdQr, tdShort, tdDest, tdCreated, tdClicks, tdActions);
+        urlsTableBody.appendChild(tr);
+      });
+    };
+
+    const fetchUrls = async () => {
+      try {
+        const res = await fetch('/api/urls');
+        if (!res.ok) return;
+        const data = await res.json();
+        allUrls = Array.isArray(data.urls) ? data.urls : [];
+        totalLinksMetric.textContent = String(data.count ?? allUrls.length);
+        totalClicksMetric.textContent = String(
+          data.totalClicks ?? allUrls.reduce((acc, u) => acc + (u.clickCount || 0), 0)
+        );
+        renderTable();
+      } catch (err) {
+        console.error('Failed to load URL directory:', err);
+      }
+    };
+
+    const lookupStats = async (code) => {
+      const shortCode = (code || statsCodeInput.value).trim();
+      if (!shortCode) {
+        document.getElementById('statOriginalUrl').textContent = 'Short code required for stats.';
+        return;
+      }
+
+      try {
         const res = await fetch(`/api/stats/${encodeURIComponent(shortCode)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || data.message || 'Stats fetch failed');
+        renderStatsPanel(data);
+      } catch (error) {
+        statsQrBox.hidden = true;
+        document.getElementById('statShortCode').textContent = shortCode;
+        document.getElementById('statClicks').textContent = '—';
+        document.getElementById('statOriginalUrl').textContent = `Error: ${error.message || 'Unable to fetch stats'}`;
+        document.getElementById('statCreatedAt').textContent = '—';
+        document.getElementById('statLastAccessed').textContent = '—';
+      }
+    };
 
-        statsResult.textContent = `Original: ${data.original_url}\nCreated: ${new Date(data.created_at).toLocaleString()}\nClicks: ${data.click_count}`;
-        } catch (error) {
-        statsResult.textContent = 'Error: ' + (error.message || 'Unable to fetch stats');
+    const deleteShortUrl = async (shortCode) => {
+      try {
+        const res = await fetch(`/api/urls/${encodeURIComponent(shortCode)}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to delete link');
         }
+        setMessage('ok', `Deleted short code "${shortCode}".`);
+        await fetchUrls();
+      } catch (error) {
+        setMessage('error', error.message || 'Could not delete link');
+      }
+    };
+
+    // Check Link Safety button
+    document.getElementById('verifySafetyBtn').addEventListener('click', async () => {
+      const originalUrl = originalUrlInput.value.trim();
+      hideSecurityAlert();
+
+      if (!originalUrl) {
+        setMessage('error', 'Enter a URL first to verify its safety and reachability.');
+        return;
+      }
+
+      setMessage('loading', 'Scanning link for phishing and broken status...');
+      try {
+        const res = await fetch('/api/verify-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ originalUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Verification failed');
+        }
+
+        showSecurityAlert(data.status, data.category, data.reasons);
+        if (data.allowed) {
+          setMessage('ok', 'Link verified safe and reachable.');
+        } else {
+          setMessage('error', `Link disallowed: ${data.category}`);
+        }
+      } catch (err) {
+        setMessage('error', err.message || 'Could not verify link');
+      }
     });
-    </script>
+
+    originalUrlInput.addEventListener('input', () => {
+      if (!securityWarningBox.hidden) {
+        hideSecurityAlert();
+      }
+    });
+
+    document.getElementById('shortenForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const originalUrl = originalUrlInput.value.trim();
+      const customCode = customCodeInput.value.trim();
+      hideSecurityAlert();
+
+      if (!originalUrl) {
+        setMessage('error', 'Provide a valid URL first.');
+        return;
+      }
+
+      setMessage('loading', 'Verifying safety & shortening URL...');
+
+      try {
+        const payload = { originalUrl };
+        if (customCode) payload.customCode = customCode;
+
+        const res = await fetch('/api/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          if (data.safetyStatus === 'phishing' || data.safetyStatus === 'broken') {
+            showSecurityAlert(data.safetyStatus, data.safetyCategory, data.reasons);
+            latestQrBox.hidden = true;
+            shortMetaSub.hidden = true;
+            resultActionBtns.hidden = true;
+            shortUrlDiv.textContent = 'Link creation blocked due to security or reachability violation.';
+          }
+          throw new Error(data.error || data.message || 'Failed to shorten URL');
+        }
+
+        latestShortData = data;
+        shortUrlDiv.innerHTML = '';
+
+        if (data.qrCodeDataUrl) {
+          latestQrImg.src = data.qrCodeDataUrl;
+          latestQrImg.alt = `QR code for ${data.shortCode}`;
+          latestQrBox.hidden = false;
+        }
+
+        const anchor = document.createElement('a');
+        anchor.href = `/${encodeURIComponent(data.shortCode)}`;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        anchor.className = 'short-link-anchor';
+        anchor.textContent = data.shortUrl;
+        anchor.addEventListener('click', () => setTimeout(fetchUrls, 600));
+
+        shortUrlDiv.appendChild(anchor);
+        shortMetaSub.textContent = `Short Code: ${data.shortCode} · Verified Safe & Reachable · Destination: ${data.originalUrl}`;
+        shortMetaSub.hidden = false;
+        resultActionBtns.hidden = false;
+
+        setMessage('ok', 'URL verified safe, shortened, and QR code generated.');
+        originalUrlInput.value = '';
+        customCodeInput.value = '';
+        statsCodeInput.value = data.shortCode;
+        renderStatsPanel(data);
+        await fetchUrls();
+      } catch (error) {
+        setMessage('error', error.message || 'Something went wrong');
+      }
+    });
+
+    document.getElementById('statsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await lookupStats();
+    });
+
+    document.getElementById('copyLatestBtn').addEventListener('click', (e) => {
+      if (latestShortData?.shortUrl) {
+        copyToClipboard(latestShortData.shortUrl, e.currentTarget);
+      }
+    });
+
+    document.getElementById('downloadLatestQrBtn').addEventListener('click', () => {
+      if (latestShortData?.qrCodeDataUrl) {
+        downloadQrDataUrl(latestShortData.qrCodeDataUrl, latestShortData.shortCode);
+      }
+    });
+
+    document.getElementById('inspectLatestBtn').addEventListener('click', () => {
+      if (latestShortData?.shortCode) {
+        statsCodeInput.value = latestShortData.shortCode;
+        lookupStats(latestShortData.shortCode);
+        document.getElementById('inspector-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+
+    document.getElementById('focusUrlBtn').addEventListener('click', () => {
+      originalUrlInput.focus();
+    });
+
+    document.getElementById('refreshListBtn').addEventListener('click', () => {
+      fetchUrls();
+    });
+
+    searchInput.addEventListener('input', () => {
+      renderTable();
+    });
+
+    document.getElementById('sortNewestBtn').addEventListener('click', (e) => {
+      currentSort = 'newest';
+      e.currentTarget.classList.add('active');
+      document.getElementById('sortClicksBtn').classList.remove('active');
+      renderTable();
+    });
+
+    document.getElementById('sortClicksBtn').addEventListener('click', (e) => {
+      currentSort = 'clicks';
+      e.currentTarget.classList.add('active');
+      document.getElementById('sortNewestBtn').classList.remove('active');
+      renderTable();
+    });
+
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      if (!allUrls.length) return;
+      const headers = ['id', 'short_code', 'short_url', 'original_url', 'created_at', 'last_accessed_at', 'click_count'];
+      const rows = allUrls.map((u) => [
+        u.id,
+        `"${u.shortCode}"`,
+        `"${u.shortUrl}"`,
+        `"${u.originalUrl.replace(/"/g, '""')}"`,
+        `"${u.createdAt || ''}"`,
+        `"${u.lastAccessedAt || ''}"`,
+        u.clickCount,
+      ]);
+      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'shortened-urls.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // Initial load
+    fetchUrls();
+  </script>
 </body>
 </html>

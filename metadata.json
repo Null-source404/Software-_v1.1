@@ -1,0 +1,5 @@
+{
+  "name": "URL Shortener",
+  "description": "A fast, lightweight URL shortener service with click tracking and link statistics.",
+  "requestFramePermissions": []
+}

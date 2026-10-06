@@ -25,3 +25,6 @@ build/
 # Logs
 logs/
 *.log
+
+# Local JSON fallback storage
+data/

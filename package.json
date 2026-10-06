@@ -5,16 +5,18 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "dev": "node src/app.js",
+    "build": "echo 'No build step required'",
     "test": "jest"
   },
   "keywords": ["url-shortener", "url", "mysql"],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "mysql2": "^3.6.0",
-    "dotenv": "^16.0.3",
+    "qrcode": "^1.5.4",
     "uuid": "^9.0.0",
     "validator": "^13.9.0"
   },

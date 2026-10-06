@@ -27,18 +27,20 @@ app.get('/health', (req, res) => {
 // Redirect route (root short code support)
 app.get('/:shortCode', urlController.redirectUrl);
 
-// Error handling middleware
-app.use(errorHandler);
-
 // 404 for non-routes when not found
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Error handling middleware
+app.use(errorHandler);
+
+// Start server when run directly
+const PORT = Number(process.env.PORT) || 3000;
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
 
 module.exports = app;
