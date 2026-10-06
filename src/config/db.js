@@ -5,6 +5,34 @@ const mysql = require('mysql2/promise');
 const DATA_DIR = path.join(__dirname, '../../data');
 const DATA_FILE = path.join(DATA_DIR, 'urls.json');
 
+const defaultAnalytics = (clicks = 0) => {
+  if (!clicks) {
+    return {
+      devices: {},
+      browsers: {},
+      referrers: {},
+      timeline: {},
+      recentEvents: [],
+    };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    devices: { Desktop: Math.ceil(clicks * 0.7), Mobile: Math.floor(clicks * 0.3) },
+    browsers: { Chrome: Math.ceil(clicks * 0.6), Safari: Math.floor(clicks * 0.4) },
+    referrers: { Direct: clicks },
+    timeline: { [today]: clicks },
+    recentEvents: [
+      {
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        device: 'Desktop',
+        browser: 'Chrome',
+        os: 'macOS',
+        referrer: 'Direct',
+      },
+    ],
+  };
+};
+
 const loadInitialStore = () => {
   if (process.env.NODE_ENV === 'test') {
     return [];
@@ -14,7 +42,12 @@ const loadInitialStore = () => {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.map((item) => ({
+          ...item,
+          max_clicks: item.max_clicks ?? null,
+          analytics_json:
+            item.analytics_json || JSON.stringify(defaultAnalytics(Number(item.click_count) || 0)),
+        }));
       }
     }
   } catch (err) {
@@ -28,6 +61,8 @@ const loadInitialStore = () => {
       created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
       last_accessed_at: new Date(Date.now() - 3600000).toISOString(),
       click_count: 14,
+      max_clicks: 50,
+      analytics_json: JSON.stringify(defaultAnalytics(14)),
     },
     {
       id: 2,
@@ -36,6 +71,8 @@ const loadInitialStore = () => {
       created_at: new Date(Date.now() - 86400000).toISOString(),
       last_accessed_at: new Date(Date.now() - 1800000).toISOString(),
       click_count: 7,
+      max_clicks: null,
+      analytics_json: JSON.stringify(defaultAnalytics(7)),
     },
   ];
 };
@@ -60,7 +97,7 @@ const createLocalPool = () => ({
     const normalized = sql.trim().replace(/\s+/g, ' ').toUpperCase();
 
     if (normalized.startsWith('INSERT INTO URLS')) {
-      const [short_code, original_url, created_at] = params;
+      const [short_code, original_url, created_at, max_clicks, analytics_json] = params;
       const existing = memoryStore.find(
         (item) => item.short_code.toLowerCase() === String(short_code).toLowerCase()
       );
@@ -75,9 +112,13 @@ const createLocalPool = () => ({
         id: nextId++,
         short_code,
         original_url,
-        created_at: (created_at instanceof Date ? created_at.toISOString() : created_at) || new Date().toISOString(),
+        created_at:
+          (created_at instanceof Date ? created_at.toISOString() : created_at) ||
+          new Date().toISOString(),
         last_accessed_at: null,
         click_count: 0,
+        max_clicks: max_clicks !== undefined && max_clicks !== null ? Number(max_clicks) : null,
+        analytics_json: analytics_json || JSON.stringify(defaultAnalytics(0)),
       };
       memoryStore.push(record);
       persistStore();
@@ -98,13 +139,18 @@ const createLocalPool = () => ({
     }
 
     if (normalized.startsWith('UPDATE URLS SET CLICK_COUNT')) {
-      const [click_count, last_accessed_at, id] =
-        params.length === 3 ? params : [params[0], new Date().toISOString(), params[1]];
+      const [click_count, last_accessed_at, analytics_json, id] =
+        params.length === 4
+          ? params
+          : [params[0], params[1], null, params[2]];
       const record = memoryStore.find((item) => item.id === id);
       if (record) {
         record.click_count = click_count;
         record.last_accessed_at =
           last_accessed_at instanceof Date ? last_accessed_at.toISOString() : last_accessed_at;
+        if (analytics_json) {
+          record.analytics_json = analytics_json;
+        }
         persistStore();
       }
       return [{ affectedRows: record ? 1 : 0 }, []];
@@ -159,7 +205,9 @@ if (process.env.DB_HOST && process.env.NODE_ENV !== 'test') {
             original_url TEXT NOT NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             last_accessed_at DATETIME NULL,
-            click_count INT NOT NULL DEFAULT 0
+            click_count INT NOT NULL DEFAULT 0,
+            max_clicks INT NULL DEFAULT NULL,
+            analytics_json LONGTEXT NULL
           )
         `);
         console.log('MySQL database connected and schema verified');

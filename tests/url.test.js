@@ -117,6 +117,22 @@ describe('URL Shortener Service API', () => {
     expect(redirectRes.headers.location).toBe('https://www.example.co.org/resources');
   });
 
+  test('POST /api/shorten accepts www.facebook.com and POST /api/click/:shortCode increments clicks', async () => {
+    const res = await request('POST', '/api/shorten', {
+      originalUrl: 'www.facebook.com',
+      customCode: 'fb-test',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.originalUrl).toBe('https://www.facebook.com');
+    expect(res.body.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
+
+    const clickRes = await request('POST', '/api/click/fb-test');
+    expect(clickRes.status).toBe(200);
+    expect(clickRes.body.clickCount).toBe(1);
+    expect(clickRes.body.originalUrl).toBe('https://www.facebook.com');
+  });
+
   test('POST /api/shorten generates a QR code Data URL and GET /api/urls includes QR codes', async () => {
     const res = await request('POST', '/api/shorten', {
       originalUrl: 'https://example.com/qr-test',
@@ -180,6 +196,48 @@ describe('URL Shortener Service API', () => {
     expect(statsRes.status).toBe(200);
     expect(statsRes.body.click_count).toBe(1);
     expect(statsRes.body.last_accessed_at).toBeTruthy();
+    expect(statsRes.body.analytics).toBeDefined();
+    expect(statsRes.body.analytics.recentEvents.length).toBe(1);
+  });
+
+  test('Max click limit disallows further redirects (410 Gone) once quota is reached', async () => {
+    const created = await request('POST', '/api/shorten', {
+      originalUrl: 'https://example.com/limited-resource',
+      customCode: 'quota-2',
+      maxClicks: 2,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.maxClicks).toBe(2);
+
+    const click1 = await request('GET', '/quota-2');
+    expect(click1.status).toBe(302);
+
+    const click2 = await request('GET', '/quota-2');
+    expect(click2.status).toBe(302);
+
+    // 3rd click must be disallowed (410 Gone)
+    const click3 = await request('GET', '/quota-2');
+    expect(click3.status).toBe(410);
+    expect(click3.body.error).toMatch(/Maximum click limit reached/i);
+  });
+
+  test('GET /:shortCode+ renders safe destination preview interstitial and supports JSON format', async () => {
+    await request('POST', '/api/shorten', {
+      originalUrl: 'https://developer.mozilla.org/en-US/docs/Web',
+      customCode: 'prev-link',
+      maxClicks: 5,
+    });
+
+    const htmlRes = await request('GET', '/prev-link+');
+    expect(htmlRes.status).toBe(200);
+    expect(htmlRes.text).toContain('Destination Link Preview');
+    expect(htmlRes.text).toContain('https://developer.mozilla.org/en-US/docs/Web');
+
+    const jsonRes = await request('GET', '/prev-link+?format=json');
+    expect(jsonRes.status).toBe(200);
+    expect(jsonRes.body.shortCode).toBe('prev-link');
+    expect(jsonRes.body.canProceed).toBe(true);
+    expect(jsonRes.body.maxClicks).toBe(5);
   });
 
   test('GET /api/urls lists all shortened links and DELETE /api/urls/:shortCode removes a link', async () => {

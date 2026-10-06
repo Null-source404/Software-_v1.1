@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>URL Shortener</title>
-  <meta name="description" content="A fast, lightweight URL shortener service with QR code generation, phishing & broken link protection, and click telemetry.">
+  <meta name="description" content="A fast, lightweight URL shortener service with QR code generation, destination preview (+), click quota limits, and phishing/broken-link protection.">
   <meta property="og:title" content="URL Shortener">
-  <meta property="og:description" content="A fast, lightweight URL shortener service with QR code generation, phishing & broken link protection, and click telemetry.">
+  <meta property="og:description" content="A fast, lightweight URL shortener service with QR code generation, destination preview (+), click quota limits, and phishing/broken-link protection.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
     <section class="hero-header">
       <div>
         <h1 class="hero-title">URL Shortener, QR Generator &amp; Link Protection</h1>
-        <p class="hero-subtitle">Generate compact short links with automatic QR codes, real-time click telemetry, and active protection that blocks broken or phishing links.</p>
+        <p class="hero-subtitle">Generate compact short links with automatic QR codes, safe destination previews (<code style="font-family:var(--font-mono);color:#e2e8f0;">/:code+</code>), click limits to prevent misuse, and phishing/broken-link protection.</p>
       </div>
       <div class="summary-metrics" aria-label="Workspace Summary">
         <div class="metric-item">
@@ -54,7 +54,7 @@
     <section class="panel" id="shorten-section">
       <div class="panel-header">
         <h2 class="panel-title">Create Short Link</h2>
-        <span class="panel-meta">Supports https://, http://, and www. links · Phishing &amp; broken-link guard active</span>
+        <span class="panel-meta">Supports https://, http://, and www. links · Phishing, broken-link &amp; click-quota guard active</span>
       </div>
 
       <form id="shortenForm" novalidate>
@@ -66,6 +66,10 @@
           <div class="field-group">
             <label for="customCode">Custom Alias (Optional)</label>
             <input type="text" id="customCode" class="mono-input" placeholder="e.g. release-v1" maxlength="24">
+          </div>
+          <div class="field-group">
+            <label for="maxClicks">Max Clicks (Optional)</label>
+            <input type="number" id="maxClicks" class="mono-input" placeholder="Unlimited" min="1" max="1000000">
           </div>
           <div class="composer-buttons">
             <button class="secondary" type="button" id="verifySafetyBtn">Check Safety</button>
@@ -92,12 +96,13 @@
               <img id="latestQrImg" src="" alt="QR code for shortened link" referrerpolicy="no-referrer">
             </div>
             <div class="result-text-stack">
-              <div id="shortUrl" class="unboxed-meta">Your shortened link and scannable QR code will appear here once generated.</div>
+              <div id="shortUrl" class="unboxed-meta">Your shortened link, QR code, and preview URL will appear here once generated.</div>
               <div id="shortMetaSub" class="unboxed-meta" hidden></div>
             </div>
           </div>
           <div class="row-actions" id="resultActionBtns" hidden>
             <button type="button" class="secondary" id="copyLatestBtn">Copy Link</button>
+            <button type="button" class="ghost" id="previewLatestBtn">Preview (+)</button>
             <button type="button" class="ghost" id="downloadLatestQrBtn">Download QR</button>
             <button type="button" class="ghost" id="inspectLatestBtn">Inspect Stats</button>
           </div>
@@ -131,7 +136,7 @@
               <th>Short Link</th>
               <th>Destination URL</th>
               <th>Created</th>
-              <th class="num-col">Clicks</th>
+              <th class="num-col">Clicks / Quota</th>
               <th class="num-col">Actions</th>
             </tr>
           </thead>
@@ -146,10 +151,10 @@
 
     <!-- Balanced 2-Column Bottom Section: Link Telemetry Inspector + API Reference -->
     <div class="bottom-split-grid">
-      <!-- Statistics Inspector Panel -->
+      <!-- Statistics & Click Analytics Inspector Panel -->
       <section class="panel" id="inspector-section">
         <div class="panel-header">
-          <h2 class="panel-title">Link Telemetry Inspector</h2>
+          <h2 class="panel-title">Link Telemetry &amp; Analytics Breakdown</h2>
           <span class="panel-meta" id="statsCodeIndicator">Lookup by short code</span>
         </div>
 
@@ -158,30 +163,59 @@
           <button class="secondary" type="submit" id="statsBtn">Get Stats</button>
         </form>
 
-        <div id="statsResult" class="stats-inspector-layout">
-          <div class="qr-preview-box" id="statsQrBox" hidden>
-            <img id="statsQrImg" src="" alt="QR code for inspected link" referrerpolicy="no-referrer">
+        <div id="statsResult">
+          <div class="stats-inspector-layout">
+            <div class="qr-preview-box" id="statsQrBox" hidden>
+              <img id="statsQrImg" src="" alt="QR code for inspected link" referrerpolicy="no-referrer">
+            </div>
+            <div class="stats-grid">
+              <div class="stat-field">
+                <span class="stat-key">Short Code</span>
+                <span class="stat-val mono" id="statShortCode">—</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-key">Clicks / Max Limit</span>
+                <span class="stat-val mono" id="statClicks">—</span>
+              </div>
+              <div class="stat-field full-width">
+                <span class="stat-key">Destination URL</span>
+                <span class="stat-val" id="statOriginalUrl">Select "Inspect" on any row above or enter a code to view live telemetry.</span>
+              </div>
+              <div class="stat-field full-width">
+                <span class="stat-key">Safe Preview URL (Interstitial)</span>
+                <span class="stat-val mono" id="statPreviewUrl">—</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-key">Created</span>
+                <span class="stat-val mono" id="statCreatedAt">—</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-key">Last Accessed</span>
+                <span class="stat-val mono" id="statLastAccessed">—</span>
+              </div>
+            </div>
           </div>
-          <div class="stats-grid">
-            <div class="stat-field">
-              <span class="stat-key">Short Code</span>
-              <span class="stat-val mono" id="statShortCode">—</span>
+
+          <!-- Click Analytics Breakdown (Devices, Browsers, Referrers & Timeline) -->
+          <div class="analytics-breakdown" id="analyticsBreakdownBox" hidden>
+            <div class="stats-grid">
+              <div class="stat-field">
+                <span class="stat-key">Devices Breakdown</span>
+                <span class="stat-val mono" id="statDevicesSummary">—</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-key">Browsers Breakdown</span>
+                <span class="stat-val mono" id="statBrowsersSummary">—</span>
+              </div>
+              <div class="stat-field full-width">
+                <span class="stat-key">Top Referrers</span>
+                <span class="stat-val mono" id="statReferrersSummary">—</span>
+              </div>
             </div>
-            <div class="stat-field">
-              <span class="stat-key">Total Clicks</span>
-              <span class="stat-val mono" id="statClicks">—</span>
-            </div>
-            <div class="stat-field full-width">
-              <span class="stat-key">Destination URL</span>
-              <span class="stat-val" id="statOriginalUrl">Select "Inspect" on any row above or enter a code to view live telemetry.</span>
-            </div>
-            <div class="stat-field">
-              <span class="stat-key">Created</span>
-              <span class="stat-val mono" id="statCreatedAt">—</span>
-            </div>
-            <div class="stat-field">
-              <span class="stat-key">Last Accessed</span>
-              <span class="stat-val mono" id="statLastAccessed">—</span>
+
+            <div>
+              <p class="analytics-subtitle" style="margin-bottom:10px;">Daily Click Activity</p>
+              <div class="analytics-bars" id="statTimelineBars"></div>
             </div>
           </div>
         </div>
@@ -191,29 +225,27 @@
       <section class="panel" id="api-section">
         <div class="panel-header">
           <h2 class="panel-title">REST API Reference</h2>
-          <span class="panel-meta">JSON Endpoints · QR &amp; Safety Guard</span>
+          <span class="panel-meta">JSON Endpoints · Preview (+) · Quota &amp; Safety Guard</span>
         </div>
 
         <div class="api-stack">
           <div class="endpoint-block">
             <p class="endpoint-title">POST /api/shorten</p>
-            <p class="endpoint-desc">Audits safety &amp; reachability, blocks phishing/broken links (HTTP 422), and returns short link + QR code.</p>
+            <p class="endpoint-desc">Creates a short link with optional <code style="font-family:var(--font-mono);">customCode</code> and <code style="font-family:var(--font-mono);">maxClicks</code> quota limit. Blocks phishing or broken URLs (HTTP 422).</p>
             <pre class="code-snippet">curl -X POST http://localhost:3000/api/shorten \
   -H "Content-Type: application/json" \
-  -d '{"originalUrl":"https://example.com","customCode":"my-link"}'</pre>
+  -d '{"originalUrl":"https://example.com","customCode":"promo","maxClicks":10}'</pre>
           </div>
 
           <div class="endpoint-block">
-            <p class="endpoint-title">POST /api/verify-url</p>
-            <p class="endpoint-desc">Pre-scans a URL for phishing indicators (brand spoofing, punycode, credential tricks) and broken status.</p>
-            <pre class="code-snippet">curl -X POST http://localhost:3000/api/verify-url \
-  -H "Content-Type: application/json" \
-  -d '{"originalUrl":"https://paypal-secure-login.com"}'</pre>
+            <p class="endpoint-title">GET /:shortCode+ &amp; GET /preview/:shortCode</p>
+            <p class="endpoint-desc">Opens the Safe Destination Preview interstitial page showing target URL, safety status, QR code, and remaining click quota before redirecting.</p>
+            <pre class="code-snippet">curl "http://localhost:3000/gh-repo+?format=json"</pre>
           </div>
 
           <div class="endpoint-block">
-            <p class="endpoint-title">GET /api/stats/:shortCode &amp; GET /:shortCode</p>
-            <p class="endpoint-desc">Fetches link telemetry + QR code or performs a verified HTTP 302 redirect.</p>
+            <p class="endpoint-title">GET /api/stats/:shortCode</p>
+            <p class="endpoint-desc">Returns click counts, quota status, QR code, and breakdown by device, browser, referrer, and daily timeline.</p>
             <pre class="code-snippet">curl http://localhost:3000/api/stats/gh-repo</pre>
           </div>
         </div>
@@ -222,7 +254,7 @@
   </main>
 
   <footer class="site-footer">
-    <span>ShortLink URL Shortener Service · Express, QRCode &amp; Link Safety Guard</span>
+    <span>ShortLink URL Shortener Service · Express, QRCode, Analytics &amp; Link Safety Guard</span>
     <span>MIT License</span>
   </footer>
 
@@ -234,12 +266,14 @@
     const latestQrImg = document.getElementById('latestQrImg');
     const statsQrBox = document.getElementById('statsQrBox');
     const statsQrImg = document.getElementById('statsQrImg');
+    const analyticsBreakdownBox = document.getElementById('analyticsBreakdownBox');
     const resultActionBtns = document.getElementById('resultActionBtns');
     const securityWarningBox = document.getElementById('securityWarningBox');
     const securityAlertTitle = document.getElementById('securityAlertTitle');
     const securityAlertReasons = document.getElementById('securityAlertReasons');
     const originalUrlInput = document.getElementById('originalUrl');
     const customCodeInput = document.getElementById('customCode');
+    const maxClicksInput = document.getElementById('maxClicks');
     const statsCodeInput = document.getElementById('statsCode');
     const urlsTableBody = document.getElementById('urlsTableBody');
     const totalLinksMetric = document.getElementById('totalLinksMetric');
@@ -301,6 +335,13 @@
       });
     };
 
+    const formatDistributionMap = (obj) => {
+      if (!obj || typeof obj !== 'object') return 'No clicks recorded yet';
+      const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
+      if (!entries.length) return 'No clicks recorded yet';
+      return entries.map(([k, v]) => `${k}: ${v}`).join(' · ');
+    };
+
     const copyToClipboard = async (text, buttonEl) => {
       try {
         await navigator.clipboard.writeText(text);
@@ -318,9 +359,31 @@
 
     const renderStatsPanel = (data) => {
       const code = data.short_code || data.shortCode || '—';
+      const clicks = data.click_count ?? data.clickCount ?? 0;
+      const maxClicks = data.max_clicks ?? data.maxClicks ?? null;
+      const quotaStr = maxClicks !== null ? `${clicks} / ${maxClicks}` : `${clicks} / Unlimited`;
+
       document.getElementById('statShortCode').textContent = code;
-      document.getElementById('statClicks').textContent = String(data.click_count ?? data.clickCount ?? 0);
+      const clicksEl = document.getElementById('statClicks');
+      clicksEl.textContent = data.limitReached ? `${quotaStr} (Limit Reached)` : quotaStr;
+      clicksEl.className = data.limitReached ? 'stat-val mono quota-limit-reached' : 'stat-val mono';
+
       document.getElementById('statOriginalUrl').textContent = data.original_url || data.originalUrl || '—';
+
+      const previewEl = document.getElementById('statPreviewUrl');
+      previewEl.innerHTML = '';
+      if (code && code !== '—') {
+        const prevAnchor = document.createElement('a');
+        prevAnchor.href = `/${encodeURIComponent(code)}+`;
+        prevAnchor.target = '_blank';
+        prevAnchor.rel = 'noopener noreferrer';
+        prevAnchor.className = 'short-code-link';
+        prevAnchor.textContent = data.previewUrl || `/${code}+`;
+        previewEl.appendChild(prevAnchor);
+      } else {
+        previewEl.textContent = '—';
+      }
+
       document.getElementById('statCreatedAt').textContent = formatDate(data.created_at || data.createdAt);
       document.getElementById('statLastAccessed').textContent = formatDate(data.last_accessed_at || data.lastAccessedAt);
       document.getElementById('statsCodeIndicator').textContent = `Code: ${code}`;
@@ -329,6 +392,46 @@
         statsQrImg.src = data.qrCodeDataUrl;
         statsQrImg.alt = `QR code for ${code}`;
         statsQrBox.hidden = false;
+      }
+
+      const analytics = data.analytics || {};
+      analyticsBreakdownBox.hidden = false;
+      document.getElementById('statDevicesSummary').textContent = formatDistributionMap(analytics.devices);
+      document.getElementById('statBrowsersSummary').textContent = formatDistributionMap(analytics.browsers);
+      document.getElementById('statReferrersSummary').textContent = formatDistributionMap(analytics.referrers);
+
+      const timelineContainer = document.getElementById('statTimelineBars');
+      timelineContainer.innerHTML = '';
+      const timelineEntries = Object.entries(analytics.timeline || {}).sort((a, b) => a[0].localeCompare(b[0]));
+      if (!timelineEntries.length) {
+        const emptyMsg = document.createElement('span');
+        emptyMsg.className = 'unboxed-meta';
+        emptyMsg.textContent = 'No daily click events recorded yet.';
+        timelineContainer.appendChild(emptyMsg);
+      } else {
+        const maxDayClicks = Math.max(...timelineEntries.map(([, count]) => count), 1);
+        timelineEntries.forEach(([day, count]) => {
+          const row = document.createElement('div');
+          row.className = 'analytics-bar-row';
+
+          const dayLabel = document.createElement('span');
+          dayLabel.className = 'stat-val mono';
+          dayLabel.textContent = day;
+
+          const track = document.createElement('div');
+          track.className = 'analytics-bar-track';
+          const fill = document.createElement('div');
+          fill.className = 'analytics-bar-fill';
+          fill.style.width = `${Math.max(Math.round((count / maxDayClicks) * 100), 6)}%`;
+          track.appendChild(fill);
+
+          const countLabel = document.createElement('span');
+          countLabel.className = 'num-col';
+          countLabel.textContent = String(count);
+
+          row.append(dayLabel, track, countLabel);
+          timelineContainer.appendChild(row);
+        });
       }
     };
 
@@ -382,7 +485,7 @@
           tdQr.textContent = '—';
         }
 
-        // 2. Clean Short Link (/code) column — avoids stretching the table with long hostnames
+        // 2. Short Link (/code) + Preview (+ link)
         const tdShort = document.createElement('td');
         const shortCellWrap = document.createElement('div');
         shortCellWrap.className = 'short-code-cell';
@@ -398,11 +501,15 @@
           setTimeout(fetchUrls, 600);
         });
 
-        const hostSub = document.createElement('span');
-        hostSub.className = 'short-code-host';
-        hostSub.textContent = `Code: ${item.shortCode}`;
+        const previewSub = document.createElement('a');
+        previewSub.href = `/${encodeURIComponent(item.shortCode)}+`;
+        previewSub.target = '_blank';
+        previewSub.rel = 'noopener noreferrer';
+        previewSub.className = 'short-code-host';
+        previewSub.style.textDecoration = 'none';
+        previewSub.textContent = `Preview: /${item.shortCode}+`;
 
-        shortCellWrap.append(linkEl, hostSub);
+        shortCellWrap.append(linkEl, previewSub);
         tdShort.appendChild(shortCellWrap);
 
         // 3. Destination URL column
@@ -421,10 +528,14 @@
         tdCreated.className = 'unboxed-meta';
         tdCreated.textContent = formatDate(item.createdAt);
 
-        // 5. Clicks column
+        // 5. Clicks / Quota column
         const tdClicks = document.createElement('td');
-        tdClicks.className = 'num-col';
-        tdClicks.textContent = String(item.clickCount);
+        tdClicks.className = item.limitReached ? 'num-col quota-limit-reached' : 'num-col';
+        const quotaDisplay =
+          item.maxClicks !== null && item.maxClicks !== undefined
+            ? `${item.clickCount} / ${item.maxClicks}`
+            : `${item.clickCount} / ∞`;
+        tdClicks.textContent = item.limitReached ? `${quotaDisplay} (Max)` : quotaDisplay;
 
         // 6. Actions column
         const tdActions = document.createElement('td');
@@ -437,11 +548,13 @@
         copyBtn.textContent = 'Copy';
         copyBtn.addEventListener('click', () => copyToClipboard(item.shortUrl, copyBtn));
 
-        const qrBtn = document.createElement('button');
-        qrBtn.type = 'button';
-        qrBtn.className = 'ghost';
-        qrBtn.textContent = 'QR';
-        qrBtn.addEventListener('click', () => downloadQrDataUrl(item.qrCodeDataUrl, item.shortCode));
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'ghost';
+        previewBtn.textContent = 'Preview (+)';
+        previewBtn.addEventListener('click', () => {
+          window.location.href = `/${encodeURIComponent(item.shortCode)}+`;
+        });
 
         const inspectBtn = document.createElement('button');
         inspectBtn.type = 'button';
@@ -459,7 +572,7 @@
         deleteBtn.textContent = 'Delete';
         deleteBtn.addEventListener('click', () => deleteShortUrl(item.shortCode));
 
-        actionsWrap.append(copyBtn, qrBtn, inspectBtn, deleteBtn);
+        actionsWrap.append(copyBtn, previewBtn, inspectBtn, deleteBtn);
         tdActions.appendChild(actionsWrap);
 
         tr.append(tdQr, tdShort, tdDest, tdCreated, tdClicks, tdActions);
@@ -484,7 +597,7 @@
     };
 
     const lookupStats = async (code) => {
-      const shortCode = (code || statsCodeInput.value).trim();
+      const shortCode = (code || statsCodeInput.value).trim().replace(/\+$/, '');
       if (!shortCode) {
         document.getElementById('statOriginalUrl').textContent = 'Short code required for stats.';
         return;
@@ -497,9 +610,11 @@
         renderStatsPanel(data);
       } catch (error) {
         statsQrBox.hidden = true;
+        analyticsBreakdownBox.hidden = true;
         document.getElementById('statShortCode').textContent = shortCode;
         document.getElementById('statClicks').textContent = '—';
         document.getElementById('statOriginalUrl').textContent = `Error: ${error.message || 'Unable to fetch stats'}`;
+        document.getElementById('statPreviewUrl').textContent = '—';
         document.getElementById('statCreatedAt').textContent = '—';
         document.getElementById('statLastAccessed').textContent = '—';
       }
@@ -564,6 +679,7 @@
       e.preventDefault();
       const originalUrl = originalUrlInput.value.trim();
       const customCode = customCodeInput.value.trim();
+      const maxClicksVal = maxClicksInput.value.trim();
       hideSecurityAlert();
 
       if (!originalUrl) {
@@ -576,6 +692,7 @@
       try {
         const payload = { originalUrl };
         if (customCode) payload.customCode = customCode;
+        if (maxClicksVal) payload.maxClicks = Number(maxClicksVal);
 
         const res = await fetch('/api/shorten', {
           method: 'POST',
@@ -613,13 +730,15 @@
         anchor.addEventListener('click', () => setTimeout(fetchUrls, 600));
 
         shortUrlDiv.appendChild(anchor);
-        shortMetaSub.textContent = `Short Code: ${data.shortCode} · Verified Safe & Reachable · Destination: ${data.originalUrl}`;
+        const quotaNote = data.maxClicks ? `Max Clicks: ${data.maxClicks}` : 'Quota: Unlimited';
+        shortMetaSub.textContent = `Code: ${data.shortCode} · Preview: /${data.shortCode}+ · ${quotaNote}`;
         shortMetaSub.hidden = false;
         resultActionBtns.hidden = false;
 
         setMessage('ok', 'URL verified safe, shortened, and QR code generated.');
         originalUrlInput.value = '';
         customCodeInput.value = '';
+        maxClicksInput.value = '';
         statsCodeInput.value = data.shortCode;
         renderStatsPanel(data);
         await fetchUrls();
@@ -636,6 +755,12 @@
     document.getElementById('copyLatestBtn').addEventListener('click', (e) => {
       if (latestShortData?.shortUrl) {
         copyToClipboard(latestShortData.shortUrl, e.currentTarget);
+      }
+    });
+
+    document.getElementById('previewLatestBtn').addEventListener('click', () => {
+      if (latestShortData?.shortCode) {
+        window.location.href = `/${encodeURIComponent(latestShortData.shortCode)}+`;
       }
     });
 
@@ -681,7 +806,7 @@
 
     document.getElementById('exportCsvBtn').addEventListener('click', () => {
       if (!allUrls.length) return;
-      const headers = ['id', 'short_code', 'short_url', 'original_url', 'created_at', 'last_accessed_at', 'click_count'];
+      const headers = ['id', 'short_code', 'short_url', 'original_url', 'created_at', 'last_accessed_at', 'click_count', 'max_clicks'];
       const rows = allUrls.map((u) => [
         u.id,
         `"${u.shortCode}"`,
@@ -690,6 +815,7 @@
         `"${u.createdAt || ''}"`,
         `"${u.lastAccessedAt || ''}"`,
         u.clickCount,
+        u.maxClicks ?? '',
       ]);
       const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -704,7 +830,11 @@
     });
 
     // Initial load
-    fetchUrls();
+    fetchUrls().then(() => {
+      if (allUrls.length > 0) {
+        renderStatsPanel(allUrls[0]);
+      }
+    });
   </script>
 </body>
 </html>

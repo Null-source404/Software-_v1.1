@@ -24,7 +24,10 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
-// Redirect route (root short code support)
+// Destination preview route (/preview/:shortCode and /:shortCode+)
+app.get('/preview/:shortCode', urlController.previewUrl);
+
+// Redirect route (root short code support, plus trailing '+' preview support)
 app.get('/:shortCode', urlController.redirectUrl);
 
 // 404 for non-routes when not found

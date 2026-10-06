@@ -8,5 +8,7 @@ CREATE TABLE IF NOT EXISTS urls (
   original_url TEXT NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_accessed_at DATETIME NULL,
-  click_count INT NOT NULL DEFAULT 0
+  click_count INT NOT NULL DEFAULT 0,
+  max_clicks INT NULL DEFAULT NULL,
+  analytics_json LONGTEXT NULL
 );

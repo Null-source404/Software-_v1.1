@@ -6,9 +6,11 @@ const PROTECTED_BRANDS = {
   paypal: ['paypal.com', 'paypal.me'],
   apple: ['apple.com', 'icloud.com'],
   icloud: ['icloud.com', 'apple.com'],
-  google: ['google.com', 'googleapis.com', 'youtube.com', 'gmail.com'],
-  microsoft: ['microsoft.com', 'live.com', 'office.com', 'azure.com', 'github.com'],
-  amazon: ['amazon.com', 'aws.amazon.com', 'amzn.to'],
+  google: ['google.com', 'googleapis.com', 'youtube.com', 'gmail.com', 'goo.gl'],
+  microsoft: ['microsoft.com', 'live.com', 'office.com', 'azure.com', 'github.com', 'bing.com'],
+  amazon: ['amazon.com', 'aws.amazon.com', 'amzn.to', 'amazon.co.uk', 'amazon.de'],
+  facebook: ['facebook.com', 'fb.com', 'fb.me', 'messenger.com'],
+  instagram: ['instagram.com', 'instagr.am'],
   netflix: ['netflix.com'],
   metamask: ['metamask.io'],
   coinbase: ['coinbase.com'],
@@ -31,7 +33,7 @@ const PHISHING_HOST_PATTERNS = [
 
 const DANGEROUS_EXTENSIONS = /\.(exe|scr|bat|cmd|vbs|msi|ps1)(\?.*)?$/i;
 
-const KNOWN_SAFE_TEST_HOSTS = new Set([
+const KNOWN_SAFE_HOSTS = new Set([
   'example.com',
   'www.example.com',
   'example.org',
@@ -41,6 +43,26 @@ const KNOWN_SAFE_TEST_HOSTS = new Set([
   'example.co.org',
   'developer.mozilla.org',
   'github.com',
+  'www.github.com',
+  'facebook.com',
+  'www.facebook.com',
+  'm.facebook.com',
+  'fb.com',
+  'google.com',
+  'www.google.com',
+  'youtube.com',
+  'www.youtube.com',
+  'x.com',
+  'twitter.com',
+  'www.twitter.com',
+  'instagram.com',
+  'www.instagram.com',
+  'linkedin.com',
+  'www.linkedin.com',
+  'reddit.com',
+  'www.reddit.com',
+  'wikipedia.org',
+  'en.wikipedia.org',
 ]);
 
 /**
@@ -124,9 +146,11 @@ const checkPhishingIndicators = (rawUrl) => {
 };
 
 /**
- * Performs a fast HTTP/HTTPS HEAD or GET check to see if the target responds with 404/410/5xx.
+ * Performs a fast HTTP/HTTPS HEAD probe to detect explicit 404/410 dead links.
+ * Note: Major sites (Facebook, LinkedIn, X, etc.) often return 400/403/405/500 to automated HEAD requests,
+ * so only explicit 404/410 responses are treated as broken when DNS resolves.
  */
-const probeHttpStatus = (targetUrl, timeoutMs = 3000) => {
+const probeHttpStatus = (targetUrl, timeoutMs = 2500) => {
   return new Promise((resolve) => {
     let parsed;
     try {
@@ -142,18 +166,19 @@ const probeHttpStatus = (targetUrl, timeoutMs = 3000) => {
         method: 'HEAD',
         timeout: timeoutMs,
         headers: {
-          'User-Agent': 'ShortLink-SafetyVerifier/1.0',
-          Accept: '*/*',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       },
       (res) => {
         res.resume();
         const code = res.statusCode || 200;
-        if (code === 404 || code === 410 || code >= 500) {
+        if (code === 404 || code === 410) {
           return resolve({
             reachable: false,
             statusCode: code,
-            reason: `Destination server returned HTTP ${code} (broken or dead link).`,
+            reason: `Destination server returned HTTP ${code} (page not found / dead link).`,
           });
         }
         return resolve({
@@ -166,23 +191,18 @@ const probeHttpStatus = (targetUrl, timeoutMs = 3000) => {
 
     req.on('timeout', () => {
       req.destroy();
-      // Some servers drop HEAD requests; treat timeout after valid DNS as reachable unless explicitly broken
       resolve({ reachable: true, statusCode: null, reason: null });
     });
 
     req.on('error', (err) => {
-      if (
-        err.code === 'ECONNREFUSED' ||
-        err.code === 'ENOTFOUND' ||
-        err.code === 'EAI_AGAIN' ||
-        err.code === 'ERR_TLS_CERT_ALTNAME_INVALID'
-      ) {
+      if (err.code === 'ENOTFOUND') {
         return resolve({
           reachable: false,
           statusCode: null,
-          reason: `Destination unreachable (${err.code}).`,
+          reason: `Domain could not be resolved (${err.code}).`,
         });
       }
+      // If DNS succeeded earlier, do not block on TLS/bot-firewall resets from sites like Facebook
       resolve({ reachable: true, statusCode: null, reason: null });
     });
 
@@ -191,7 +211,7 @@ const probeHttpStatus = (targetUrl, timeoutMs = 3000) => {
 };
 
 /**
- * Checks if a URL is broken (non-existent domain, .invalid TLD, or returns HTTP 404/410/5xx).
+ * Checks if a URL is broken (non-existent domain, .invalid TLD, or returns HTTP 404/410).
  */
 const checkBrokenLink = async (rawUrl) => {
   let parsed;
@@ -222,14 +242,13 @@ const checkBrokenLink = async (rawUrl) => {
     };
   }
 
-  if (KNOWN_SAFE_TEST_HOSTS.has(hostname)) {
+  if (KNOWN_SAFE_HOSTS.has(hostname)) {
     return {
       isBroken: false,
       reasons: [],
     };
   }
 
-  // In test mode, avoid external network flakiness for unlisted domains unless localhost
   if (process.env.NODE_ENV === 'test' && hostname !== '127.0.0.1' && hostname !== 'localhost') {
     return {
       isBroken: false,
@@ -243,16 +262,16 @@ const checkBrokenLink = async (rawUrl) => {
   } catch (err) {
     return {
       isBroken: true,
-      reasons: [`Domain "${hostname}" could not be resolved (${err.code || 'DNS lookup failed'}).`],
+      reasons: [`Domain "${hostname}" does not exist or could not be resolved (${err.code || 'DNS lookup failed'}).`],
     };
   }
 
-  // Probe HTTP status for 404 / 410 / connection refused
-  const probe = await probeHttpStatus(rawUrl, 3000);
+  // Probe HTTP status for explicit 404 / 410
+  const probe = await probeHttpStatus(rawUrl, 2500);
   if (!probe.reachable) {
     return {
       isBroken: true,
-      reasons: [probe.reason || `Destination "${hostname}" is unreachable or broken.`],
+      reasons: [probe.reason || `Destination "${hostname}" returned 404/410 broken status.`],
     };
   }
 
